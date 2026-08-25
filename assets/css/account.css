@@ -1,0 +1,136 @@
+/*
+ * Pestaña "Seguridad" de Mi cuenta.
+ * Se apoya en las variables del tema (Blocksy y compatibles) para heredar
+ * color y espaciado; los valores tras la coma son el respaldo.
+ */
+
+.lm2fa-wrap {
+  --lm2fa-line: var(--theme-border-color, rgba(0, 0, 0, .1));
+  --lm2fa-accent: var(--theme-palette-color-1, #3eaf7c);
+  --lm2fa-text: var(--theme-palette-color-3, #3a4f66);
+  --lm2fa-muted: var(--theme-palette-color-4, #7a8a99);
+  --lm2fa-alt: var(--theme-palette-color-7, #f5f7f9);
+  --lm2fa-gap: var(--theme-content-spacing, 1.5em);
+
+  color: var(--lm2fa-text);
+}
+
+.lm2fa-wrap h3 {
+  margin: 0 0 .7em;
+  font-size: 1.02em;
+}
+
+.lm2fa-wrap .lm2fa-panel {
+  padding: 0 0 var(--lm2fa-gap);
+  margin-bottom: var(--lm2fa-gap);
+  border-bottom: 1px solid var(--lm2fa-line);
+}
+
+.lm2fa-wrap .lm2fa-panel:last-of-type { border-bottom: 0; }
+
+.lm2fa-wrap .lm2fa-hint {
+  margin: .4em 0 1em;
+  color: var(--lm2fa-muted);
+  font-size: .86em;
+  line-height: 1.55;
+}
+
+.lm2fa-wrap .lm2fa-hint.is-warning { color: #b26a00; }
+
+.lm2fa-wrap .lm2fa-badge {
+  display: inline-block;
+  padding: .2em .7em;
+  margin-right: .5em;
+  border: 1px solid var(--lm2fa-line);
+  border-radius: 2em;
+  font-size: .76em;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.lm2fa-wrap .lm2fa-badge.is-on { color: var(--lm2fa-accent); border-color: var(--lm2fa-accent); }
+.lm2fa-wrap .lm2fa-badge.is-off { color: var(--lm2fa-muted); }
+
+.lm2fa-wrap .lm2fa-field {
+  max-width: 280px;
+  margin-bottom: 1em;
+}
+
+.lm2fa-wrap .lm2fa-field label {
+  display: block;
+  margin-bottom: .35em;
+  font-size: .85em;
+  font-weight: 500;
+}
+
+.lm2fa-wrap .lm2fa-field input { width: 100%; }
+
+.lm2fa-wrap .lm2fa-codes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: .5em;
+  margin: 0 0 1em;
+  padding: 1em;
+  background: var(--lm2fa-alt);
+  list-style: none;
+}
+
+.lm2fa-wrap .lm2fa-codes li {
+  font-family: var(--theme-font-family-mono, monospace);
+  font-size: .92em;
+  letter-spacing: .08em;
+}
+
+.lm2fa-wrap .lm2fa-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .8em;
+  align-items: center;
+}
+
+.lm2fa-wrap .lm2fa-buttons form { display: inline; }
+
+.lm2fa-wrap .lm2fa-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--lm2fa-muted);
+  font-family: inherit;
+  font-size: .88em;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.lm2fa-wrap .lm2fa-link.is-danger { color: #c0392b; }
+
+.lm2fa-wrap .lm2fa-alert {
+  padding: .9em 1.1em;
+  margin-bottom: var(--lm2fa-gap);
+  background: var(--lm2fa-alt);
+  border-left: 3px solid var(--lm2fa-accent);
+  font-size: .9em;
+}
+
+.lm2fa-wrap .lm2fa-alert.is-error { border-left-color: #c0392b; }
+
+.lm2fa-wrap .lm2fa-devices {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lm2fa-wrap .lm2fa-devices li {
+  display: flex;
+  gap: 1em;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: .8em 0;
+  border-bottom: 1px solid var(--lm2fa-line);
+}
+
+.lm2fa-wrap .lm2fa-devices li:last-child { border-bottom: 0; }
+.lm2fa-wrap .lm2fa-devices .lm2fa-hint { display: block; margin: .2em 0 0; }
+
+@media print {
+  .lm2fa-wrap .lm2fa-buttons { display: none; }
+}

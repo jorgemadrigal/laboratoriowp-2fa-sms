@@ -1,0 +1,191 @@
+/*
+ * Pantallas del back-office.
+ * Las clases lm2fa-panel, lm2fa-badge, lm2fa-codes... son las mismas que en
+ * account.css: el gestor del usuario se pinta igual en los dos sitios.
+ */
+
+.lm2fa-admin .lm2fa-panel {
+  max-width: 760px;
+  padding: 0 0 20px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid #dcdcde;
+}
+
+.lm2fa-admin .lm2fa-panel:last-of-type {
+  border-bottom: 0;
+}
+
+.lm2fa-admin .lm2fa-panel h2,
+.lm2fa-admin .lm2fa-panel h3 {
+  margin-top: 0;
+}
+
+.lm2fa-hint {
+  margin: .4em 0 1em;
+  color: #646970;
+  font-size: 13px;
+}
+
+.lm2fa-hint.is-warning {
+  color: #8a6116;
+}
+
+.lm2fa-badge {
+  display: inline-block;
+  padding: 2px 10px;
+  margin-right: 6px;
+  border: 1px solid #c3c4c7;
+  border-radius: 20px;
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.lm2fa-badge.is-on { color: #008a20; border-color: #008a20; }
+.lm2fa-badge.is-off { color: #b32d2e; border-color: #b32d2e; }
+
+.lm2fa-on { color: #008a20; }
+.lm2fa-off { color: #b32d2e; }
+
+.lm2fa-field {
+  max-width: 260px;
+  margin-bottom: 12px;
+}
+
+.lm2fa-field label {
+  display: block;
+  margin-bottom: 4px;
+  font-weight: 600;
+}
+
+.lm2fa-field input { width: 100%; }
+
+.lm2fa-check {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.lm2fa-codes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 14px;
+  background: #f6f7f7;
+  border-left: 3px solid #2271b1;
+  list-style: none;
+}
+
+.lm2fa-codes li {
+  font-family: Menlo, Consolas, monospace;
+  letter-spacing: 1px;
+}
+
+.lm2fa-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.lm2fa-buttons form { display: inline; }
+
+.lm2fa-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #646970;
+  font-size: 13px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.lm2fa-link.is-danger { color: #b32d2e; }
+.lm2fa-inline { display: inline-block; margin-left: 8px; }
+
+.lm2fa-alert {
+  padding: 10px 14px;
+  margin-bottom: 16px;
+  background: #f6f7f7;
+  border-left: 3px solid #2271b1;
+}
+
+.lm2fa-alert.is-error { border-left-color: #b32d2e; }
+
+/* Saldo del servicio. */
+.lm2fa-balance {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 28px;
+  align-items: flex-end;
+  margin: 0 0 12px;
+}
+
+.lm2fa-balance span {
+  display: block;
+  margin-bottom: 2px;
+  color: #646970;
+  font-size: 11px;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+.lm2fa-balance strong {
+  font-size: 22px;
+  font-weight: 600;
+}
+
+.lm2fa-balance strong.is-small { font-size: 14px; }
+
+/* Equipos de confianza. */
+.lm2fa-devices {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lm2fa-devices li {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 12px 0;
+  border-bottom: 1px solid #f0f0f1;
+}
+
+.lm2fa-devices li:last-child { border-bottom: 0; }
+.lm2fa-devices .lm2fa-hint { display: block; margin: 2px 0 0; }
+
+/* Usuarios. */
+.lm2fa-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin: 16px 0;
+}
+
+.lm2fa-filters .lm2fa-hint { margin: 0; }
+
+.lm2fa-log code { font-size: 11px; }
+.lm2fa-log-actions { margin: 12px 0 24px; }
+
+#lm2fa-logo-preview {
+  min-height: 40px;
+  margin-bottom: 10px;
+}
+
+#lm2fa-logo-preview img {
+  max-width: 260px;
+  height: auto;
+  padding: 12px;
+  background: #f6f7f7;
+  border: 1px solid #dcdcde;
+}
+
+@media print {
+  #adminmenumain,
+  #wpadminbar,
+  #wpfooter,
+  .lm2fa-buttons,
+  .notice { display: none !important; }
+}
