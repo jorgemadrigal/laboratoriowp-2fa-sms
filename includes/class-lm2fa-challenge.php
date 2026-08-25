@@ -26,14 +26,19 @@ final class LM2FA_Challenge {
   const CHANNEL_SMS   = 'sms';
   const CHANNEL_EMAIL = 'email';
 
+  /** Dónde se pinta el desafío, según dónde escribiera la contraseña. */
+  const SCREEN_LOGIN   = 'login';
+  const SCREEN_ACCOUNT = 'account';
+
   /* ------------------------------- Sesión ------------------------------- */
 
   /**
    * Abre la sesión pendiente y devuelve el token en claro.
    *
+   * @param string $screen self::SCREEN_LOGIN o self::SCREEN_ACCOUNT.
    * @return string
    */
-  public static function open( $user_id, $redirect, $remember ) {
+  public static function open( $user_id, $redirect, $remember, $screen = self::SCREEN_LOGIN ) {
     $token = wp_generate_password( 32, false, false );
 
     update_user_meta(
@@ -44,6 +49,7 @@ final class LM2FA_Challenge {
         'expires'    => time() + self::LIFETIME,
         'redirect'   => $redirect,
         'remember'   => (bool) $remember,
+        'screen'     => $screen,
         'channel'    => self::CHANNEL_SMS,
         'request_id' => '',
         'resends'    => 0,
@@ -53,6 +59,10 @@ final class LM2FA_Challenge {
     );
 
     return $token;
+  }
+
+  public static function screen( array $session ) {
+    return isset( $session['screen'] ) ? $session['screen'] : self::SCREEN_LOGIN;
   }
 
   /** @return array|false */

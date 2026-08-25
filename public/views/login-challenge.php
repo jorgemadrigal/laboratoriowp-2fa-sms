@@ -13,6 +13,7 @@
  * @var bool   $trust_enabled
  * @var int    $trust_days
  * @var bool   $can_resend
+ * @var string $cancel_url
  * @var bool   $email_offer   Se puede ofrecer el envío por correo.
  * @var string $form_action
  *
@@ -33,14 +34,14 @@ if ( $fatal ) :
   ?>
   <div class="lm2fa-box">
     <p><?php esc_html_e( 'No pudimos continuar con la verificación.', 'lmsms-2fa' ); ?></p>
-    <p><a href="<?php echo esc_url( wp_login_url() ); ?>"><?php esc_html_e( 'Volver al inicio de sesión', 'lmsms-2fa' ); ?></a></p>
+    <p><a href="<?php echo esc_url( $cancel_url ); ?>"><?php esc_html_e( 'Volver al inicio de sesión', 'lmsms-2fa' ); ?></a></p>
   </div>
   <?php
   return;
 endif;
 ?>
 
-<form name="lm2fa_form" id="loginform" action="<?php echo esc_url( $form_action ); ?>" method="post">
+<form name="lm2fa_form" id="loginform" action="<?php echo esc_url( $form_action ); ?>" method="post" data-lm2fa-challenge>
   <div class="lm2fa-box">
     <p>
       <?php
@@ -99,7 +100,7 @@ endif;
       </button>
     <?php endif; ?>
 
-    <a href="<?php echo esc_url( wp_login_url() ); ?>" class="lm2fa-muted"><?php esc_html_e( 'Cancelar', 'lmsms-2fa' ); ?></a>
+    <a href="<?php echo esc_url( $cancel_url ); ?>" class="lm2fa-muted"><?php esc_html_e( 'Cancelar', 'lmsms-2fa' ); ?></a>
   </div>
 
   <?php if ( $codes_left > 0 ) : ?>

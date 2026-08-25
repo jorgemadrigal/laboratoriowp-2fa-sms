@@ -131,6 +131,69 @@
 .lm2fa-wrap .lm2fa-devices li:last-child { border-bottom: 0; }
 .lm2fa-wrap .lm2fa-devices .lm2fa-hint { display: block; margin: .2em 0 0; }
 
+/*
+ * Desafío del segundo factor, en el sitio del formulario de acceso.
+ *
+ * Va centrado y en una columna estrecha: es una pantalla de paso, sin
+ * navegación ni nada más que mirar, y así no queda descolgado a la
+ * izquierda de un contenedor ancho.
+ */
+
+.lm2fa-challenge {
+  max-width: 420px;
+  margin-left: auto;
+  margin-right: auto;
+  text-align: center;
+}
+
+.lm2fa-challenge .lm2fa-code {
+  padding: .5em;
+  font-size: 1.6em;
+  letter-spacing: .35em;
+  text-align: center;
+}
+
+.lm2fa-challenge .lm2fa-buttons {
+  margin-top: 1em;
+  justify-content: center;
+}
+
+/* Muchos temas alinean a la izquierda las filas de formulario. */
+.lm2fa-challenge .form-row,
+.lm2fa-challenge label {
+  text-align: center;
+}
+
+/*
+ * Los avisos de WooCommerce sí se quedan a la izquierda: llevan un icono
+ * posicionado y un sangrado propios, y centrarles el texto los descuadra.
+ */
+.lm2fa-challenge .woocommerce-error,
+.lm2fa-challenge .woocommerce-message {
+  text-align: left;
+}
+
+.lm2fa-challenge .lm2fa-alt {
+  margin-top: 1.5em;
+  padding-top: 1em;
+  border-top: 1px solid var(--lm2fa-line);
+}
+
+.lm2fa-challenge .lm2fa-alt summary {
+  color: var(--lm2fa-muted);
+  font-size: .88em;
+  cursor: pointer;
+}
+
+.lm2fa-challenge .lm2fa-alt > * {
+  margin-top: 1em;
+}
+
+.lm2fa-challenge .lm2fa-submit[disabled] {
+  opacity: .6;
+  cursor: progress;
+}
+
 @media print {
   .lm2fa-wrap .lm2fa-buttons { display: none; }
 }

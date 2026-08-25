@@ -1,6 +1,7 @@
 /*
- * Detalles de la pantalla del código. Sin dependencias: wp-login.php no
- * carga jQuery y no merece la pena obligarle.
+ * Detalles de la pantalla del código, la de wp-login.php y la de Mi cuenta.
+ * Sin dependencias: wp-login.php no carga jQuery y no merece la pena
+ * obligarle.
  *
  * Nada de esto es imprescindible; si el JS falla, el formulario funciona.
  *
@@ -11,7 +12,7 @@
 ( function () {
   'use strict';
 
-  var form = document.getElementById( 'loginform' );
+  var form = document.querySelector( '[data-lm2fa-challenge]' );
   var field = document.getElementById( 'lm2fa_code' );
 
   if ( ! form ) {

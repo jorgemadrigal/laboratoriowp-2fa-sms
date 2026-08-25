@@ -26,12 +26,13 @@ final class LM2FA_Plugin {
    */
   private static function modules() {
     return array(
-      'LM2FA_Login',    // Intercepta el login y pinta el desafío.
-      'LM2FA_Enroll',   // Alta y gestión del segundo factor.
-      'LM2FA_Account',  // Pestaña "Seguridad" en Mi cuenta de WooCommerce.
-      'LM2FA_Branding', // Apariencia de la pantalla de acceso.
-      'LM2FA_Monitor',  // Vigilancia del saldo del servicio.
-      'LM2FA_Admin',    // Pantallas de administración.
+      'LM2FA_Login',             // Intercepta el acceso y pinta el desafío en wp-login.php.
+      'LM2FA_Account_Challenge', // El mismo desafío dentro de Mi cuenta.
+      'LM2FA_Enroll',            // Alta y gestión del segundo factor.
+      'LM2FA_Account',           // Pestaña "Seguridad" en Mi cuenta de WooCommerce.
+      'LM2FA_Branding',          // Apariencia de la pantalla de acceso.
+      'LM2FA_Monitor',           // Vigilancia del saldo del servicio.
+      'LM2FA_Admin',             // Pantallas de administración.
     );
   }
 

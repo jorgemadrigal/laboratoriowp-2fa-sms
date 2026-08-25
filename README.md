@@ -40,7 +40,8 @@ includes/                     Núcleo, sin HTML
   class-lm2fa-devices.php     Equipos de confianza y huellas conocidas
   class-lm2fa-challenge.php   Sesión pendiente entre contraseña y código
 
-  class-lm2fa-login.php       Interceptación del acceso y desafío
+  class-lm2fa-verifier.php    Máquina de estados del desafío, sin pantalla
+  class-lm2fa-login.php       Pantalla del desafío en wp-login.php
   class-lm2fa-enroll.php      Alta y gestión (controlador de formularios)
   class-lm2fa-email-otp.php   Canal alternativo: código por correo
   class-lm2fa-mailer.php      wp_mail() con plantillas
@@ -56,10 +57,12 @@ admin/                        Back-office
 
 public/                       Front
   class-lm2fa-account.php     Pestaña "Seguridad" en Mi cuenta (WooCommerce)
+  class-lm2fa-account-challenge.php  Pantalla del desafío dentro de Mi cuenta
   class-lm2fa-branding.php    Apariencia de wp-login.php
   class-lm2fa-manager.php     Gestor del usuario, reutilizado en los dos sitios
   views/manager-*.php         Fragmentos del gestor
-  views/login-challenge.php   Formulario del código
+  views/login-challenge.php   Formulario del código (wp-login.php)
+  views/account-challenge.php Formulario del código (Mi cuenta)
   views/email-*.php           Plantillas de correo
 
 assets/
@@ -138,14 +141,34 @@ wp_login              la contraseña ya es correcta
      wp_destroy_current_session() + wp_clear_auth_cookie()
      LM2FA_Challenge::open()      sesión pendiente, 10 min
      POST /otp/request            SMS con el código
-     redirect a wp-login.php?action=lm2fa_challenge
+     redirect a la pantalla de origen (ver más abajo)
 
-formulario del código
+formulario del código      -> LM2FA_Verifier
   ├─ código SMS       -> POST /otp/verify
   ├─ código de correo -> se comprueba aquí (si está habilitado)
   ├─ código respaldo  -> HMAC contra user_meta
   └─ acierto: wp_set_auth_cookie() y a donde iba
 ```
+
+### Dónde se pinta el desafío
+
+El usuario termina de identificarse donde empezó:
+
+| Entró por | Pantalla | Destino final |
+| --- | --- | --- |
+| `wp-login.php` | `LM2FA_Login` | `redirect_to`, filtro `login_redirect` |
+| Formulario de Mi cuenta o del checkout | `LM2FA_Account_Challenge` | `$_POST['redirect']`, filtro `woocommerce_login_redirect` |
+
+Mandar a un cliente de la tienda a `wp-login.php` rompe la marca y parece
+otro sitio. La pantalla de Mi cuenta sustituye la plantilla
+`myaccount/form-login.php` a través del filtro `wc_get_template`, así que el
+desafío hereda la plantilla del tema, su cabecera y su pie; el resto de la
+página no se toca.
+
+**La lógica no se duplica.** `LM2FA_Verifier` resuelve el POST —reenviar,
+cambiar de canal, código de respaldo, verificar— y devuelve un resultado sin
+imprimir ni redirigir. Cada pantalla solo decide cómo pintarlo y a dónde
+mandar al usuario. Para añadir una tercera pantalla basta con eso.
 
 **El token de sesión se destruye, no solo la cookie.** `wp_login` se dispara
 después de que WordPress haya creado la sesión: borrar únicamente la cookie
@@ -195,6 +218,7 @@ escritorio y correo— cuando baja del umbral configurado.
 
 ```php
 apply_filters( 'lm2fa_requires_challenge', $required, $user );  // ¿pedir código?
+apply_filters( 'lm2fa_use_account_screen', $claims );           // desafío en el front
 apply_filters( 'lm2fa_normalize_phone', $phone, $raw );         // otras numeraciones
 do_action( 'lm2fa_login_verified', $user );                     // acceso completado
 do_action( 'lm2fa_enrolled', $user_id );

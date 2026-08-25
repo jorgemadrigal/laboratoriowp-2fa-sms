@@ -1,14 +1,19 @@
 <?php
 /**
- * Desafío de inicio de sesión.
+ * Interceptación del acceso y desafío en wp-login.php.
  *
  * Flujo completo:
  *
  *   wp_login          la contraseña ya era correcta -> se anula la sesión
  *                     recién creada y se abre una sesión pendiente
- *   redirect          wp-login.php?action=lm2fa_challenge
+ *   redirect          a la pantalla que corresponda: wp-login.php si entró
+ *                     por ahí, Mi cuenta si entró por el formulario de
+ *                     WooCommerce (LM2FA_Account_Challenge)
  *   login_form_...    pinta el formulario y procesa el POST
  *   complete()        wp_set_auth_cookie() y a donde iba
+ *
+ * La lógica de verificación no está aquí: vive en LM2FA_Verifier, para que
+ * las dos pantallas se comporten exactamente igual.
  *
  * @package LaboratorioWP_2FA
  */
@@ -26,7 +31,7 @@ final class LM2FA_Login {
     add_action( 'login_form_' . self::ACTION, array( __CLASS__, 'route' ) );
     add_action( 'login_enqueue_scripts', array( __CLASS__, 'assets' ) );
 
-    // Vías que no pasan por wp-login.php y se saltarían el segundo factor.
+    // Vías que no pasan por un formulario y se saltarían el segundo factor.
     add_filter( 'authenticate', array( __CLASS__, 'block_legacy_auth' ), 50 );
     add_filter( 'wp_is_application_passwords_available_for_user', array( __CLASS__, 'block_app_passwords' ), 10, 2 );
   }
@@ -60,103 +65,37 @@ final class LM2FA_Login {
     wp_clear_auth_cookie();
     wp_set_current_user( 0 );
 
-    $redirect = isset( $_REQUEST['redirect_to'] ) ? wp_unslash( $_REQUEST['redirect_to'] ) : admin_url();
-    $remember = ! empty( $_REQUEST['rememberme'] );
-    $token    = LM2FA_Challenge::open( $user->ID, $redirect, $remember );
+    // Quien haya iniciado sesión desde el front se queda en el front.
+    $on_account = LM2FA_Account_Challenge::claims_login();
 
-    self::send_code( $user, $token );
+    $token = LM2FA_Challenge::open(
+      $user->ID,
+      $on_account ? LM2FA_Account_Challenge::intended_redirect() : self::intended_redirect(),
+      ! empty( $_REQUEST['rememberme'] ),
+      $on_account ? LM2FA_Challenge::SCREEN_ACCOUNT : LM2FA_Challenge::SCREEN_LOGIN
+    );
+
+    LM2FA_Verifier::issue( $user, $token );
     LM2FA_Challenge::set_cookie( $user->ID, $token );
 
-    wp_safe_redirect( site_url( 'wp-login.php?action=' . self::ACTION, 'login' ) );
+    wp_safe_redirect( $on_account ? LM2FA_Account_Challenge::url() : self::url() );
     exit;
   }
 
-  /** Primer envío del código, con el resultado guardado como aviso. */
-  private static function send_code( WP_User $user, $token ) {
-    $otp = LM2FA_Client::otp_request(
-      LM2FA_User::phone( $user->ID ),
-      LM2FA_Client::reference( $user->ID, 'login' )
-    );
-
-    if ( is_wp_error( $otp ) ) {
-      self::fall_back_to_email( $user, $token, $otp );
-      return;
-    }
-
-    $session = LM2FA_Challenge::get( $user->ID, $token );
-    if ( is_array( $session ) ) {
-      $session['request_id'] = sanitize_text_field( $otp['request_id'] );
-      LM2FA_Challenge::save( $user->ID, $session );
-    }
-
-    LM2FA_Log::add(
-      'otp_sent',
-      'login · ' . ( isset( $otp['billed'] ) ? $otp['billed'] : '?' ),
-      $user->ID
-    );
-
-    LM2FA_Challenge::flash(
-      $token,
-      'notice',
-      sprintf(
-        /* translators: %s teléfono enmascarado. */
-        __( 'Enviamos un código al teléfono %s.', 'lmsms-2fa' ),
-        isset( $otp['phone'] ) ? $otp['phone'] : LM2FA_User::masked_phone( $user->ID )
-      )
-    );
+  /** URL de esta pantalla. */
+  public static function url() {
+    return site_url( 'wp-login.php?action=' . self::ACTION, 'login' );
   }
 
-  /**
-   * El SMS no salió. Si la culpa es del servicio —pasarela caída, sin saldo,
-   * sin conexión— y el correo está habilitado, se entrega por ahí en lugar de
-   * dejar al usuario delante de un formulario que no puede completar.
-   *
-   * Un error atribuible al usuario (teléfono mal registrado) no activa el
-   * respaldo: ahí lo correcto es decírselo.
-   */
-  private static function fall_back_to_email( WP_User $user, $token, WP_Error $error ) {
-    $message = LM2FA_Errors::message( $error );
-
-    if ( ! LM2FA_Errors::is_service_failure( $error ) || ! LM2FA_Email_OTP::is_available_for( $user ) ) {
-      LM2FA_Challenge::flash( $token, 'error', $message );
-      return;
-    }
-
-    $session = LM2FA_Challenge::get( $user->ID, $token );
-
-    if ( ! is_array( $session ) ) {
-      LM2FA_Challenge::flash( $token, 'error', $message );
-      return;
-    }
-
-    $issued = LM2FA_Email_OTP::issue( $user, $session );
-
-    if ( is_wp_error( $issued ) ) {
-      LM2FA_Challenge::flash( $token, 'error', $message );
-      return;
-    }
-
-    $issued['channel'] = LM2FA_Challenge::CHANNEL_EMAIL;
-    LM2FA_Challenge::save( $user->ID, $issued );
-
-    LM2FA_Log::add( 'email_sent', 'respaldo · ' . $error->get_error_code(), $user->ID );
-
-    LM2FA_Challenge::flash(
-      $token,
-      'notice',
-      sprintf(
-        /* translators: %s correo enmascarado. */
-        __( 'No pudimos enviar el SMS, así que te mandamos el código al correo %s.', 'lmsms-2fa' ),
-        LM2FA_Email_OTP::masked_email( $user )
-      )
-    );
+  private static function intended_redirect() {
+    return isset( $_REQUEST['redirect_to'] ) ? wp_unslash( $_REQUEST['redirect_to'] ) : admin_url();
   }
 
   /* ------------------ Vías alternativas de autenticación ----------------- */
 
   /**
-   * XML-RPC y las peticiones autenticadas por contraseña fuera de
-   * wp-login.php no pueden mostrar un formulario, así que la única postura
+   * XML-RPC y las peticiones autenticadas por contraseña fuera de un
+   * formulario no pueden mostrar un desafío, así que la única postura
    * segura es rechazarlas para quien tiene el segundo factor activo.
    */
   public static function block_legacy_auth( $user ) {
@@ -165,6 +104,7 @@ final class LM2FA_Login {
     }
 
     $is_xmlrpc = defined( 'XMLRPC_REQUEST' ) && XMLRPC_REQUEST;
+
     if ( ! $is_xmlrpc || ! LM2FA_User::requires_challenge( $user ) ) {
       return $user;
     }
@@ -185,9 +125,11 @@ final class LM2FA_Login {
     if ( ! LM2FA_Settings::is_yes( 'lm2fa_block_legacy_auth' ) ) {
       return $available;
     }
+
     if ( $user instanceof WP_User && LM2FA_User::is_active( $user->ID ) ) {
       return false;
     }
+
     return $available;
   }
 
@@ -210,179 +152,36 @@ final class LM2FA_Login {
 
       self::render(
         $user,
-        $token,
         $session,
+        $token,
         'error' === $type ? $message : '',
         'notice' === $type ? $message : ''
       );
       exit;
     }
 
-    self::process( $user, $session, $token );
-  }
+    $result = LM2FA_Verifier::handle( $user, $session );
 
-  private static function process( WP_User $user, array $session, $token ) {
-    // Freno común a todo lo que llegue por POST desde una misma IP.
-    if ( ! LM2FA_Util::rate_limit( 'challenge_ip_' . LM2FA_Util::ip(), 30, 15 * MINUTE_IN_SECONDS ) ) {
-      self::render( $user, $token, $session, __( 'Demasiados intentos desde esta conexión. Espera unos minutos.', 'lmsms-2fa' ) );
-      exit;
+    if ( LM2FA_Verifier::VERIFIED === $result['outcome'] ) {
+      self::complete( $user, $result['session'], $result['trust'] );
     }
-
-    if ( isset( $_POST['lm2fa_resend'] ) ) {
-      self::handle_resend( $user, $session, $token );
-    }
-
-    if ( isset( $_POST['lm2fa_email'] ) ) {
-      self::handle_email( $user, $session, $token );
-    }
-
-    $recovery = isset( $_POST['lm2fa_recovery'] ) ? sanitize_text_field( wp_unslash( $_POST['lm2fa_recovery'] ) ) : '';
-    if ( '' !== $recovery ) {
-      self::handle_recovery( $user, $session, $token, $recovery );
-    }
-
-    self::handle_code( $user, $session, $token );
-  }
-
-  /* ------------------------------ Acciones ------------------------------- */
-
-  private static function handle_resend( WP_User $user, array $session, $token ) {
-    if ( ! LM2FA_Challenge::can_resend( $session ) ) {
-      self::render( $user, $token, $session, __( 'Has alcanzado el límite de reenvíos. Vuelve a iniciar sesión.', 'lmsms-2fa' ), '', true );
-      exit;
-    }
-
-    $otp = LM2FA_Client::otp_request(
-      LM2FA_User::phone( $user->ID ),
-      LM2FA_Client::reference( $user->ID, 'resend' )
-    );
-
-    if ( is_wp_error( $otp ) ) {
-      self::render( $user, $token, $session, LM2FA_Errors::message( $otp ) );
-      exit;
-    }
-
-    $session['request_id'] = sanitize_text_field( $otp['request_id'] );
-    $session['channel']    = LM2FA_Challenge::CHANNEL_SMS;
-    $session['resends']    = (int) $session['resends'] + 1;
-
-    // Pedir un SMS nuevo anula el código de correo: si no, se comprobaría
-    // el del canal equivocado y el usuario no entendería nada.
-    $session['email'] = array();
-
-    LM2FA_Challenge::save( $user->ID, $session );
-
-    LM2FA_Log::add( 'otp_sent', 'resend', $user->ID );
-
-    self::render( $user, $token, $session, '', __( 'Enviamos un código nuevo.', 'lmsms-2fa' ) );
-    exit;
-  }
-
-  private static function handle_email( WP_User $user, array $session, $token ) {
-    $issued = LM2FA_Email_OTP::issue( $user, $session );
-
-    if ( is_wp_error( $issued ) ) {
-      self::render( $user, $token, $session, $issued->get_error_message() );
-      exit;
-    }
-
-    $issued['channel'] = LM2FA_Challenge::CHANNEL_EMAIL;
-    LM2FA_Challenge::save( $user->ID, $issued );
 
     self::render(
       $user,
+      $result['session'],
       $token,
-      $issued,
-      '',
-      sprintf(
-        /* translators: %s correo enmascarado. */
-        __( 'Enviamos un código al correo %s.', 'lmsms-2fa' ),
-        LM2FA_Email_OTP::masked_email( $user )
-      )
+      $result['error'],
+      $result['notice'],
+      LM2FA_Verifier::FATAL === $result['outcome']
     );
     exit;
   }
 
-  private static function handle_recovery( WP_User $user, array $session, $token, $recovery ) {
-    if ( ! LM2FA_Util::rate_limit( 'recovery_' . $user->ID, 5, 15 * MINUTE_IN_SECONDS ) ) {
-      self::render( $user, $token, $session, __( 'Demasiados intentos. Espera unos minutos.', 'lmsms-2fa' ) );
-      exit;
-    }
-
-    if ( LM2FA_Recovery::consume( $user->ID, $recovery ) ) {
-      LM2FA_Log::add( 'recovery_used', 'quedan ' . LM2FA_Recovery::left( $user->ID ), $user->ID );
-      self::complete( $user, $session, false );
-    }
-
-    self::render( $user, $token, $session, __( 'Código de respaldo no válido.', 'lmsms-2fa' ) );
-    exit;
-  }
-
-  private static function handle_code( WP_User $user, array $session, $token ) {
-    $code = isset( $_POST['lm2fa_code'] ) ? preg_replace( '/\D/', '', wp_unslash( $_POST['lm2fa_code'] ) ) : '';
-
-    if ( '' === $code ) {
-      self::render( $user, $token, $session, __( 'Escribe el código que recibiste.', 'lmsms-2fa' ) );
-      exit;
-    }
-
-    if ( ! LM2FA_Util::rate_limit( 'verify_' . $user->ID, 8, 15 * MINUTE_IN_SECONDS ) ) {
-      self::render( $user, $token, $session, __( 'Demasiados intentos. Espera unos minutos.', 'lmsms-2fa' ) );
-      exit;
-    }
-
-    // Si hay un código de correo vigente se comprueba contra él.
-    if ( LM2FA_Email_OTP::is_pending( $session ) ) {
-      list( $valid, $session, $error ) = LM2FA_Email_OTP::verify( $session, $code );
-      LM2FA_Challenge::save( $user->ID, $session );
-
-      if ( $valid ) {
-        self::complete( $user, $session, ! empty( $_POST['lm2fa_trust'] ) );
-      }
-
-      LM2FA_Log::add( 'login_failed', 'email', $user->ID );
-      self::render( $user, $token, $session, $error );
-      exit;
-    }
-
-    $result = LM2FA_Client::otp_verify( $session['request_id'], $code );
-
-    if ( is_wp_error( $result ) ) {
-      LM2FA_Log::add( 'login_failed', $result->get_error_code(), $user->ID );
-      self::render( $user, $token, $session, LM2FA_Errors::message( $result ) );
-      exit;
-    }
-
-    self::complete( $user, $session, ! empty( $_POST['lm2fa_trust'] ) );
-  }
-
-  /* ------------------------------ Cierre --------------------------------- */
-
   private static function complete( WP_User $user, array $session, $trust_device ) {
-    LM2FA_Challenge::close( $user->ID );
-
-    wp_set_current_user( $user->ID );
-    wp_set_auth_cookie( $user->ID, ! empty( $session['remember'] ) );
-
-    if ( $trust_device ) {
-      LM2FA_Devices::remember( $user->ID );
-    }
-
-    LM2FA_User::touch_last_auth( $user->ID );
-    LM2FA_Log::add( 'login_ok', isset( $session['channel'] ) ? $session['channel'] : 'sms', $user->ID );
-
-    if ( LM2FA_Devices::note_fingerprint( $user->ID ) && LM2FA_Settings::is_yes( 'lm2fa_new_device_alert' ) ) {
-      LM2FA_Mailer::new_device( $user );
-    }
-
-    /**
-     * El acceso se ha verificado por completo.
-     *
-     * @param WP_User $user
-     */
-    do_action( 'lm2fa_login_verified', $user );
+    LM2FA_Verifier::complete( $user, $session, $trust_device );
 
     $redirect = ! empty( $session['redirect'] ) ? $session['redirect'] : admin_url();
+
     wp_safe_redirect( apply_filters( 'login_redirect', $redirect, $redirect, $user ) );
     exit;
   }
@@ -403,30 +202,15 @@ final class LM2FA_Login {
   /**
    * @param bool $fatal Sin salida posible: solo se ofrece volver a empezar.
    */
-  private static function render( WP_User $user, $token, array $session, $error = '', $notice = '', $fatal = false ) {
-    $by_email = LM2FA_Email_OTP::is_pending( $session );
+  private static function render( WP_User $user, array $session, $token, $error = '', $notice = '', $fatal = false ) {
+    $vars = LM2FA_Verifier::view_vars( $user, $session, $token, $error, $notice );
+
+    $vars['fatal']       = $fatal;
+    $vars['form_action'] = site_url( 'wp-login.php?action=' . self::ACTION, 'login_post' );
+    $vars['cancel_url']  = wp_login_url();
 
     login_header( __( 'Verificación en dos pasos', 'lmsms-2fa' ), '', new WP_Error() );
-
-    LM2FA_Util::view(
-      'public/views/login-challenge',
-      array(
-        'user_id'        => $user->ID,
-        'token'          => $token,
-        'error'          => $error,
-        'notice'         => $notice,
-        'fatal'          => $fatal,
-        'by_email'       => $by_email,
-        'destination'    => $by_email ? LM2FA_Email_OTP::masked_email( $user ) : LM2FA_User::masked_phone( $user->ID ),
-        'codes_left'     => LM2FA_Recovery::left( $user->ID ),
-        'trust_enabled'  => LM2FA_Devices::is_enabled(),
-        'trust_days'     => LM2FA_Settings::int( 'lm2fa_trust_days' ),
-        'can_resend'     => LM2FA_Challenge::can_resend( $session ),
-        'email_offer'    => ! $by_email && LM2FA_Email_OTP::is_available_for( $user ),
-        'form_action'    => site_url( 'wp-login.php?action=' . self::ACTION, 'login_post' ),
-      )
-    );
-
+    LM2FA_Util::view( 'public/views/login-challenge', $vars );
     login_footer( 'lm2fa_code' );
   }
 }
