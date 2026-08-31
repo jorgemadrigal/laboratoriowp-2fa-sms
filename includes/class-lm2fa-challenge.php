@@ -20,7 +20,16 @@ final class LM2FA_Challenge {
 
   const META     = 'lm2fa_pending_session';
   const COOKIE   = 'lm2fa_pending';
+
+  /** Ventana inicial, mientras no se sabe cuánto dura el código. */
   const LIFETIME = 10 * MINUTE_IN_SECONDS;
+
+  /** Margen sobre la vigencia del código para dar tiempo a teclearlo. */
+  const GRACE = 2 * MINUTE_IN_SECONDS;
+
+  /** Tope de seguridad: una sesión a medias no puede vivir indefinidamente. */
+  const MAX_LIFETIME = HOUR_IN_SECONDS;
+
   const MAX_RESENDS = 2;
 
   const CHANNEL_SMS   = 'sms';
@@ -98,14 +107,54 @@ final class LM2FA_Challenge {
     return (int) $session['resends'] < self::MAX_RESENDS;
   }
 
+  /**
+   * Ajusta la caducidad de la sesión a la vigencia real del código.
+   *
+   * El servidor decide cuánto vive un OTP (ajuste lm_otp_ttl) y lo dice en
+   * expires_in al entregarlo. Con una ventana local fija, un TTL más largo
+   * echaba al usuario del formulario mientras su código seguía siendo
+   * válido. Nunca se acorta por debajo de LIFETIME: si el código muere
+   * antes, es preferible dejar el formulario en pie para que pueda pedir
+   * otro a devolverlo a la pantalla de acceso.
+   *
+   * @param int $expires_in Segundos de vigencia que declaró el servidor.
+   * @return array Sesión con la caducidad ajustada.
+   */
+  public static function sync_expiry( array $session, $expires_in ) {
+    $expires_in = (int) $expires_in;
+
+    if ( $expires_in <= 0 ) {
+      return $session;
+    }
+
+    $window = min( self::MAX_LIFETIME, max( self::LIFETIME, $expires_in + self::GRACE ) );
+
+    $session['expires'] = time() + $window;
+
+    return $session;
+  }
+
   /* ------------------------------- Cookie ------------------------------- */
 
   private static function cookie_name() {
     return self::COOKIE . '_' . COOKIEHASH;
   }
 
+  /**
+   * La cookie caduca a la vez que la sesión, que para entonces ya puede
+   * haberse ajustado a la vigencia del código (ver sync_expiry()).
+   *
+   * En un reenvío la ventana se amplía sin volver a tocar la cookie: ahí
+   * las credenciales viajan en el POST del propio formulario.
+   */
   public static function set_cookie( $user_id, $token ) {
-    LM2FA_Util::set_cookie( self::cookie_name(), $user_id . '|' . $token, time() + self::LIFETIME );
+    $session = get_user_meta( $user_id, self::META, true );
+
+    $expires = ( is_array( $session ) && ! empty( $session['expires'] ) )
+      ? (int) $session['expires']
+      : time() + self::LIFETIME;
+
+    LM2FA_Util::set_cookie( self::cookie_name(), $user_id . '|' . $token, $expires );
   }
 
   /**

@@ -47,6 +47,14 @@ final class LM2FA_Install {
       delete_option( 'lm2fa_quota_time' );
     }
 
+    // 2.1.0 lee campos del saldo que antes se ignoraban (enabled) y anota la
+    // versión del servidor: se descarta lo cacheado para que la próxima
+    // consulta lo traiga completo.
+    if ( '' !== $installed && version_compare( $installed, '2.1.0', '<' ) ) {
+      LM2FA_Client::flush_cache();
+      delete_option( 'lm2fa_balance_state' );
+    }
+
     update_option( self::OPTION_VERSION, LM2FA_VERSION, false );
     update_option( self::OPTION_FLUSH, 'yes', false );
   }

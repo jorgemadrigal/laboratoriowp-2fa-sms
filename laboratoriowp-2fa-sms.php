@@ -3,7 +3,7 @@
  * Plugin Name: LaboratorioWP 2FA por SMS
  * Plugin URI:  https://laboratoriowp.com/sms-marketing-y-otp-por-sms/
  * Description: Verificación en dos pasos por SMS para WordPress y WooCommerce, conectada a la plataforma LaboratorioWP. Requiere una clave API de tu panel de cliente.
- * Version:     2.0.0
+ * Version:     2.1.0
  * Author:      LaboratorioWP.com
  * Author URI:  https://laboratoriowp.com
  * Requires PHP: 7.4
@@ -25,7 +25,7 @@ if ( ! defined( 'ABSPATH' ) ) {
   exit;
 }
 
-define( 'LM2FA_VERSION', '2.0.0' );
+define( 'LM2FA_VERSION', '2.1.0' );
 define( 'LM2FA_FILE', __FILE__ );
 define( 'LM2FA_DIR', plugin_dir_path( __FILE__ ) );
 define( 'LM2FA_URL', plugin_dir_url( __FILE__ ) );

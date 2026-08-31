@@ -59,7 +59,11 @@ if ( ! defined( 'ABSPATH' ) ) {
         </div>
       </div>
 
-      <?php if ( isset( $quota['can_send'] ) && ! $quota['can_send'] ) : ?>
+      <?php if ( isset( $quota['enabled'] ) && ! $quota['enabled'] ) : ?>
+        <div class="lm2fa-alert is-error">
+          <?php esc_html_e( 'El proveedor tiene desactivado el servicio de verificación: no se entregará ningún código, tengas o no saldo.', 'lmsms-2fa' ); ?>
+        </div>
+      <?php elseif ( isset( $quota['can_send'] ) && ! $quota['can_send'] ) : ?>
         <div class="lm2fa-alert is-error">
           <?php esc_html_e( 'Sin saldo: los usuarios con 2FA no podrán recibir códigos. Adquiere un paquete de SMS en tu panel de cliente.', 'lmsms-2fa' ); ?>
         </div>

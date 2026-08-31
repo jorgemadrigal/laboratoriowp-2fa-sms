@@ -5,7 +5,7 @@ pasarela ni guarda créditos: pide los códigos a la API REST de
 [SMS marketing y OTP por SMS](https://laboratoriowp.com/sms-marketing-y-otp-por-sms/)
 con una clave API que generas en tu panel de cliente.
 
-- **Versión:** 2.0.0
+- **Versión:** 2.1.0
 - **Requiere:** PHP 7.4+, WordPress 6.2+ (WooCommerce opcional)
 - **Servicio:** https://laboratoriowp.com/sms-marketing-y-otp-por-sms/
 - **Panel de cliente:** https://clientes.laboratoriowp.com/
@@ -122,6 +122,27 @@ Namespace `lm-saas/v1`, autenticación por cabecera `X-API-KEY`.
 | `POST /otp/verify` | Comprobación del código escrito |
 | `GET /otp/quota` | Saldo del panel y vigilancia diaria (caché de 5 min) |
 
+Del otro lado está `laboratoriowpsms-saas-pro` (v15.0.0 o superior, constante
+`LM2FA_Client::MIN_SERVER`). `GET /account` declara su versión y se anota: si
+se queda por debajo, el administrador ve un aviso en el escritorio.
+
+Lo que el servidor decide y este plugin acata en vez de suponer:
+
+- **Vigencia del código.** `expires_in` viene en cada `/otp/request` y con él
+  se ajusta lo que dura la sesión pendiente (`LM2FA_Challenge::sync_expiry()`)
+  y el alta a medias. Antes eran 10 minutos fijos, y con un `lm_otp_ttl` más
+  largo el formulario caducaba antes que el código.
+- **Numeración.** `LM2FA_Phone::normalize()` replica caso por caso la cadena
+  de `LM_Phone::normalize()`: se acepta y se rechaza exactamente lo mismo. Se
+  guarda en nacional (10 dígitos) porque es lo que teclea el usuario; el
+  servidor trabaja en internacional.
+- **Saldo.** El servidor manda `quota_status` en tres sitios —`/otp/quota`,
+  la respuesta de `/otp/request` y el error 402 de "sin saldo"—. Los tres
+  pasan por el mismo sitio y disparan `lm2fa_quota_updated`, así que el aviso
+  de saldo bajo salta en el momento y no en la siguiente pasada diaria.
+- **Enmascarado.** El servidor devuelve `5255******78`; en pantalla se
+  reescribe como `55******78` para no mezclar dos formatos del mismo número.
+
 Los códigos de error del servidor (`lm_otp_expired`, `lm_otp_no_balance`…) se
 traducen en `LM2FA_Errors`. Si el servidor añade uno nuevo, es la única lista
 que hay que ampliar.
@@ -212,6 +233,14 @@ código y no entra. Por eso hay una tarea diaria (`lm2fa_daily_check`) que
 consulta `/otp/quota`, marca el estado y avisa al administrador —banda en el
 escritorio y correo— cuando baja del umbral configurado.
 
+Además, cualquier lectura fresca del saldo se evalúa al vuelo: el error 402
+de una solicitud OTP trae el `quota_status` del momento, así que el aviso
+aparece en cuanto el servidor lo dice.
+
+Se distingue quedarse sin saldo (`can_send`) de que el proveedor haya apagado
+el servicio (`enabled`): el consejo no es el mismo, porque comprar créditos no
+reactiva un servicio desactivado.
+
 ---
 
 ## 8. Ganchos
@@ -220,6 +249,9 @@ escritorio y correo— cuando baja del umbral configurado.
 apply_filters( 'lm2fa_requires_challenge', $required, $user );  // ¿pedir código?
 apply_filters( 'lm2fa_use_account_screen', $claims );           // desafío en el front
 apply_filters( 'lm2fa_normalize_phone', $phone, $raw );         // otras numeraciones
+apply_filters( 'lm2fa_panel_path', $path );                     // ruta del panel en el servidor
+apply_filters( 'lm2fa_panel_url', $url, $tab );                 // enlace completo al panel
+do_action( 'lm2fa_quota_updated', $quota );                     // lectura fresca del saldo
 do_action( 'lm2fa_login_verified', $user );                     // acceso completado
 do_action( 'lm2fa_enrolled', $user_id );
 do_action( 'lm2fa_disabled', $user_id );

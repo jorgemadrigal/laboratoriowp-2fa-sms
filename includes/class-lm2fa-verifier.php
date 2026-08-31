@@ -52,6 +52,10 @@ final class LM2FA_Verifier {
 
     if ( is_array( $session ) ) {
       $session['request_id'] = sanitize_text_field( $otp['request_id'] );
+
+      // El servidor manda cuánto vive el código: la sesión dura lo mismo.
+      $session = LM2FA_Challenge::sync_expiry( $session, isset( $otp['expires_in'] ) ? $otp['expires_in'] : 0 );
+
       LM2FA_Challenge::save( $user->ID, $session );
     }
 
@@ -67,9 +71,27 @@ final class LM2FA_Verifier {
       sprintf(
         /* translators: %s teléfono enmascarado. */
         __( 'Enviamos un código al teléfono %s.', 'lmsms-2fa' ),
-        isset( $otp['phone'] ) ? $otp['phone'] : LM2FA_User::masked_phone( $user->ID )
+        self::destination_phone( $user, $otp )
       )
     );
+  }
+
+  /**
+   * Teléfono al que el servidor dice haber enviado el código, escrito como
+   * se escribe en todo el plugin.
+   *
+   * El servidor enmascara en internacional (5255****78) porque trabaja en
+   * MSISDN; aquí se usa el nacional (55******89). Mezclar los dos en la
+   * misma sesión hace dudar al usuario de si es su número.
+   *
+   * @param array $otp Respuesta de /otp/request.
+   * @return string
+   */
+  private static function destination_phone( WP_User $user, array $otp ) {
+    if ( ! empty( $otp['phone'] ) ) {
+      return LM2FA_Phone::mask_remote( $otp['phone'] );
+    }
+    return LM2FA_User::masked_phone( $user->ID );
   }
 
   /**
@@ -166,10 +188,21 @@ final class LM2FA_Verifier {
     // el del canal equivocado y el usuario no entendería nada.
     $session['email'] = array();
 
+    // El código nuevo estrena vigencia; la sesión la acompaña.
+    $session = LM2FA_Challenge::sync_expiry( $session, isset( $otp['expires_in'] ) ? $otp['expires_in'] : 0 );
+
     LM2FA_Challenge::save( $user->ID, $session );
     LM2FA_Log::add( 'otp_sent', 'resend', $user->ID );
 
-    return self::pending( $session, '', __( 'Enviamos un código nuevo.', 'lmsms-2fa' ) );
+    return self::pending(
+      $session,
+      '',
+      sprintf(
+        /* translators: %s teléfono enmascarado. */
+        __( 'Enviamos un código nuevo al teléfono %s.', 'lmsms-2fa' ),
+        self::destination_phone( $user, $otp )
+      )
+    );
   }
 
   private static function switch_to_email( WP_User $user, array $session ) {

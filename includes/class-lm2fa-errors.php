@@ -18,9 +18,12 @@ final class LM2FA_Errors {
   /** @return array<string,string> */
   private static function messages() {
     return array(
+      // Nombre antiguo de lm_otp_no_balance: se conserva por si el servidor
+      // que hay enfrente es anterior a la v15.
       'lm_otp_quota_exceeded' => __( 'El servicio de verificación por SMS no tiene saldo disponible. Contacta al administrador del sitio.', 'lmsms-2fa' ),
       'lm_otp_no_balance'     => __( 'El servicio de verificación por SMS no tiene saldo disponible. Contacta al administrador del sitio.', 'lmsms-2fa' ),
       'lm_otp_flood'          => __( 'Demasiadas solicitudes. Intenta más tarde.', 'lmsms-2fa' ),
+      'lm_otp_missing_code'   => __( 'Escribe el código que recibiste.', 'lmsms-2fa' ),
       'lm_otp_invalid'        => __( 'El código no es correcto.', 'lmsms-2fa' ),
       'lm_otp_expired'        => __( 'El código expiró. Solicita uno nuevo.', 'lmsms-2fa' ),
       'lm_otp_invalidated'    => __( 'El código expiró. Solicita uno nuevo.', 'lmsms-2fa' ),
@@ -66,11 +69,31 @@ final class LM2FA_Errors {
     return $message;
   }
 
-  /** True cuando el problema es del servicio, no de lo que escribió el usuario. */
+  /**
+   * True cuando el problema es del servicio, no de lo que escribió el usuario.
+   *
+   * De esta lista depende el respaldo por correo: entra cuando el SMS no
+   * puede salir por causas ajenas a quien intenta entrar. Queda fuera a
+   * propósito lm_otp_flood (tope por número, 5 a la hora) y lm_otp_cooldown,
+   * que sí son consecuencia de lo que acaba de hacer el usuario; en cambio
+   * lm_rate_limited es el tope de la cuenta entera contra el servidor y no
+   * hay nada que él pueda hacer al respecto.
+   */
   public static function is_service_failure( WP_Error $error ) {
     return in_array(
       $error->get_error_code(),
-      array( 'lm2fa_transport', 'lm2fa_bad_payload', 'lm2fa_not_configured', 'lm_otp_send_failed', 'lm_otp_no_balance', 'lm_otp_quota_exceeded', 'lm_otp_disabled' ),
+      array(
+        'lm2fa_transport',
+        'lm2fa_bad_payload',
+        'lm2fa_not_configured',
+        'lm_otp_send_failed',
+        'lm_otp_no_balance',
+        'lm_otp_quota_exceeded',
+        'lm_otp_disabled',
+        'lm_rate_limited',
+        'lm_invalid_key',
+        'lm_missing_key',
+      ),
       true
     );
   }

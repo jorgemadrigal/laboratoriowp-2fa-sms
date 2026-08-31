@@ -81,9 +81,8 @@ final class LM2FA_Admin_Actions {
       return array( 'error', LM2FA_Errors::message( $quota ), LM2FA_Admin::settings_url( 'connection' ) );
     }
 
-    // Una recarga reciente puede haber resuelto el aviso de saldo bajo.
-    LM2FA_Monitor::run( $quota );
-
+    // El propio cliente avisa a LM2FA_Monitor con la lectura fresca, así que
+    // una recarga reciente ya ha resuelto aquí el aviso de saldo bajo.
     return array( 'ok', __( 'Saldo actualizado.', 'lmsms-2fa' ), LM2FA_Admin::settings_url( 'connection' ) );
   }
 
@@ -98,12 +97,27 @@ final class LM2FA_Admin_Actions {
     $otp = isset( $account['otp'] ) ? (array) $account['otp'] : array();
 
     $message = sprintf(
-      /* translators: 1: créditos, 2: verificaciones gratuitas restantes, 3: capacidad total. */
-      __( 'Conexión correcta. Créditos: %1$s. Verificaciones gratuitas restantes: %2$s. Capacidad total: %3$s.', 'lmsms-2fa' ),
+      /* translators: 1: créditos, 2: verificaciones gratuitas restantes, 3: capacidad total, 4: versión del servidor. */
+      __( 'Conexión correcta con el servidor %4$s. Créditos: %1$s. Verificaciones gratuitas restantes: %2$s. Capacidad total: %3$s.', 'lmsms-2fa' ),
       isset( $account['credits'] ) ? $account['credits'] : '?',
       isset( $otp['free_remaining'] ) ? $otp['free_remaining'] : '?',
-      isset( $otp['total_capacity'] ) ? $otp['total_capacity'] : '?'
+      isset( $otp['total_capacity'] ) ? $otp['total_capacity'] : '?',
+      isset( $account['version'] ) ? $account['version'] : '?'
     );
+
+    // La conexión funciona; lo que puede fallar es el detalle del contrato.
+    if ( ! LM2FA_Client::is_supported_server() ) {
+      $message .= ' ' . sprintf(
+        /* translators: %s versión mínima recomendada del servidor. */
+        __( 'Aviso: este plugin está preparado para la versión %s o superior del servidor.', 'lmsms-2fa' ),
+        LM2FA_Client::MIN_SERVER
+      );
+    }
+
+    // El servicio puede estar apagado en el servidor aunque haya saldo.
+    if ( isset( $otp['enabled'] ) && ! $otp['enabled'] ) {
+      $message .= ' ' . __( 'Ojo: el proveedor tiene desactivado el servicio de verificación.', 'lmsms-2fa' );
+    }
 
     return array( 'ok', $message, LM2FA_Admin::settings_url( 'connection' ) );
   }

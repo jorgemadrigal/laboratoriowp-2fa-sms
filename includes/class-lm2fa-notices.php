@@ -67,15 +67,25 @@ final class LM2FA_Notices {
 
   /* --------------------------- Alta en curso ----------------------------- */
 
-  /** Guarda la solicitud OTP abierta mientras el usuario confirma su número. */
-  public static function store_enrollment( $user_id, $request_id, $phone ) {
+  /**
+   * Guarda la solicitud OTP abierta mientras el usuario confirma su número.
+   *
+   * Vive lo que dure el código en el servidor (expires_in) más un margen
+   * para teclearlo, nunca menos del cuarto de hora de siempre: el alta no
+   * puede caducar antes que el código que se acaba de mandar.
+   *
+   * @param int $expires_in Vigencia declarada por el servidor, en segundos.
+   */
+  public static function store_enrollment( $user_id, $request_id, $phone, $expires_in = 0 ) {
+    $ttl = max( 15 * MINUTE_IN_SECONDS, (int) $expires_in + LM2FA_Challenge::GRACE );
+
     set_transient(
       self::key( 'enroll', $user_id ),
       array(
         'request_id' => $request_id,
         'phone'      => $phone,
       ),
-      15 * MINUTE_IN_SECONDS
+      min( LM2FA_Challenge::MAX_LIFETIME, $ttl )
     );
   }
 

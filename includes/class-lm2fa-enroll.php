@@ -100,8 +100,14 @@ final class LM2FA_Enroll {
       return array( LM2FA_Notices::ERROR, LM2FA_Errors::message( $otp ) );
     }
 
-    LM2FA_Notices::store_enrollment( $user_id, sanitize_text_field( $otp['request_id'] ), $phone );
-    LM2FA_Log::add( 'otp_sent', 'enroll', $user_id );
+    LM2FA_Notices::store_enrollment(
+      $user_id,
+      sanitize_text_field( $otp['request_id'] ),
+      $phone,
+      isset( $otp['expires_in'] ) ? $otp['expires_in'] : 0
+    );
+
+    LM2FA_Log::add( 'otp_sent', 'enroll · ' . ( isset( $otp['billed'] ) ? $otp['billed'] : '?' ), $user_id );
 
     return array(
       LM2FA_Notices::SUCCESS,

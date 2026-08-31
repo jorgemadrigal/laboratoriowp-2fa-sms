@@ -41,6 +41,7 @@ $options = array_merge(
     'lm2fa_version',
     'lm2fa_needs_flush',
     'lm2fa_quota_time',
+    'lm2fa_server_version',
     'lm2fa_balance_state',
   )
 );

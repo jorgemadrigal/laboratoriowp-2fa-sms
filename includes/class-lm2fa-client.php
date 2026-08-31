@@ -28,8 +28,16 @@ final class LM2FA_Client {
   const NAMESPACE_PATH = '/wp-json/lm-saas/v1';
   const REST_ROUTE     = '/lm-saas/v1';
 
+  /**
+   * Versión del servidor a partir de la cual el contrato es el que espera
+   * este plugin: /otp/request devuelve expires_in y quota, y los errores
+   * traen retry_after y attempts_left. Con menos, se avisa al administrador.
+   */
+  const MIN_SERVER = '15.0.0';
+
   const QUOTA_TTL     = 5 * MINUTE_IN_SECONDS;
   const OPTION_TIME   = 'lm2fa_quota_time';
+  const OPTION_SERVER_VERSION = 'lm2fa_server_version';
   const LEGACY_QUOTA  = 'lm2fa_quota';
 
   public static function server_url() {
@@ -45,9 +53,52 @@ final class LM2FA_Client {
     return '' !== self::api_key() && '' !== self::server_url();
   }
 
-  /** Enlace directo a la pestaña de claves API del panel de cliente. */
+  /**
+   * Enlace directo a una pestaña del panel de cliente.
+   *
+   * El panel es un endpoint de "Mi cuenta" de WooCommerce en el servidor
+   * (LMSAAS_ENDPOINT = 'sms-panel'), colgado del slug que allí tenga esa
+   * página. 'mi-cuenta' es el valor habitual, pero no es una constante del
+   * contrato: quien lo tenga distinto lo ajusta con el filtro sin tocar
+   * código.
+   *
+   * @param string $tab Pestaña del panel: otp, api, enviar, historial...
+   */
   public static function panel_url( $tab = 'otp' ) {
-    return self::server_url() . '/mi-cuenta/sms-panel/?tab=' . rawurlencode( $tab );
+    /**
+     * Ruta del panel dentro del servidor, sin barras al principio ni al final.
+     *
+     * @param string $path Por defecto 'mi-cuenta/sms-panel'.
+     */
+    $path = trim( (string) apply_filters( 'lm2fa_panel_path', 'mi-cuenta/sms-panel' ), '/' );
+    $url  = self::server_url() . '/' . $path . '/?tab=' . rawurlencode( $tab );
+
+    /**
+     * URL final, por si el panel vive en otro dominio.
+     *
+     * @param string $url
+     * @param string $tab
+     */
+    return apply_filters( 'lm2fa_panel_url', $url, $tab );
+  }
+
+  /* ------------------------------ Versión -------------------------------- */
+
+  /** Última versión que declaró el servidor en /account. '' si nunca se pidió. */
+  public static function server_version() {
+    return (string) get_option( self::OPTION_SERVER_VERSION, '' );
+  }
+
+  /**
+   * ¿El servidor cumple el contrato mínimo?
+   *
+   * Mientras no se haya hablado con él no hay motivo para alarmar: se da
+   * por bueno y ya lo dirá la primera llamada a /account.
+   */
+  public static function is_supported_server() {
+    $version = self::server_version();
+
+    return ( '' === $version ) || version_compare( $version, self::MIN_SERVER, '>=' );
   }
 
   /* ------------------------------- Caché -------------------------------- */
@@ -65,6 +116,32 @@ final class LM2FA_Client {
 
   public static function quota_updated_at() {
     return (string) get_option( self::OPTION_TIME, '' );
+  }
+
+  /**
+   * Guarda un estado de cuota recién llegado y avisa a quien vigile el saldo.
+   *
+   * El servidor manda quota_status en más sitios que /otp/quota: también en
+   * la respuesta de /otp/request y dentro del error 402 de "sin saldo". Todos
+   * pasan por aquí, así que el aviso de saldo bajo salta en el momento en que
+   * el servidor lo dice y no hasta la siguiente tarea diaria.
+   *
+   * @param array $quota Estructura quota_status del servidor.
+   */
+  private static function store_quota( $quota ) {
+    if ( ! is_array( $quota ) || ! isset( $quota['total_capacity'] ) ) {
+      return;
+    }
+
+    set_transient( self::cache_key(), $quota, self::QUOTA_TTL );
+    update_option( self::OPTION_TIME, LM2FA_Util::now_gmt(), false );
+
+    /**
+     * Hay una lectura fresca del saldo.
+     *
+     * @param array $quota Estructura quota_status del servidor.
+     */
+    do_action( 'lm2fa_quota_updated', $quota );
   }
 
   /* ------------------------------ Transporte ----------------------------- */
@@ -213,8 +290,18 @@ final class LM2FA_Client {
       )
     );
 
-    // Cualquier solicitud altera el saldo: se refresca en el próximo acceso.
+    // Cualquier solicitud altera el saldo: se tira la lectura anterior.
     self::flush_cache();
+
+    // Pero el servidor acaba de decir cómo queda la cuenta, tanto si el
+    // envío salió como si falló por falta de saldo (402). Se aprovecha en
+    // vez de volver a preguntar.
+    if ( is_wp_error( $result ) ) {
+      $data = (array) $result->get_error_data();
+      self::store_quota( isset( $data['quota'] ) ? $data['quota'] : null );
+    } elseif ( isset( $result['quota'] ) ) {
+      self::store_quota( $result['quota'] );
+    }
 
     return $result;
   }
@@ -250,8 +337,7 @@ final class LM2FA_Client {
     $result = self::request( '/otp/quota', null, 'GET' );
 
     if ( ! is_wp_error( $result ) ) {
-      set_transient( self::cache_key(), $result, self::QUOTA_TTL );
-      update_option( self::OPTION_TIME, LM2FA_Util::now_gmt(), false );
+      self::store_quota( $result );
     }
 
     return $result;
@@ -259,7 +345,23 @@ final class LM2FA_Client {
 
   /** @return array|WP_Error { user_id, credits, otp, version } */
   public static function account() {
-    return self::request( '/account', null, 'GET' );
+    $result = self::request( '/account', null, 'GET' );
+
+    if ( is_wp_error( $result ) ) {
+      return $result;
+    }
+
+    // /account es la única ruta que declara la versión del servidor: se
+    // anota para poder avisar si se queda por debajo del contrato.
+    if ( isset( $result['version'] ) ) {
+      update_option( self::OPTION_SERVER_VERSION, sanitize_text_field( (string) $result['version'] ), false );
+    }
+
+    if ( isset( $result['otp'] ) ) {
+      self::store_quota( $result['otp'] );
+    }
+
+    return $result;
   }
 
   /** Identificador de origen que verá el administrador del servidor central. */
